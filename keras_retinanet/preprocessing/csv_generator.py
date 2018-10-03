@@ -212,3 +212,4 @@ class CSVGenerator(Generator):
             boxes[idx, 4] = self.name_to_label(class_name)
 
         return boxes
+
