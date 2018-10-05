@@ -115,7 +115,6 @@ def create_generator(args):
 
     return generator
 
-
 def parse_args(args):
     """ Parse the arguments.
     """
