@@ -23,7 +23,6 @@ from ..utils.anchors import AnchorParameters
 def read_config_file(config_path):
     config = configparser.ConfigParser()
     config.read(config_path)
-
     return config
 
 
