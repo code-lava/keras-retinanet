@@ -60,6 +60,15 @@ def preprocess_image(x, mode='caffe'):
     return x
 
 
+def normalize_image(image):
+    # preprocess image.
+    min_image_color = 0
+    max_image_color = 255
+    image = np.divide(
+        np.subtract(image, float(min_image_color)), (float(max_image_color)-float(min_image_color)))
+    return image
+
+
 def adjust_transform_for_image(transform, image, relative_translation):
     """ Adjust a transformation for a specific image.
 
