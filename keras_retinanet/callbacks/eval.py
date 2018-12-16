@@ -94,7 +94,7 @@ class Evaluate(keras.callbacks.Callback):
             self.tensorboard.writer.add_summary(summary, epoch)
 
         if self.comet is not None:
-            self.comet.log_metric('val_retinanet_mAP', self.mean_ap)
+            self.comet.log_metric('val_retinanet_mAP', self.mean_ap, epoch)
 
         logs['val_retinanet_mAP'] = self.mean_ap
 
