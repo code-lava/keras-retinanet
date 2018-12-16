@@ -90,13 +90,13 @@ class Evaluate(keras.callbacks.Callback):
             summary = tf.Summary()
             summary_value = summary.value.add()
             summary_value.simple_value = self.mean_ap
-            summary_value.tag = "mAP"
+            summary_value.tag = "val_retinanet_mAP"
             self.tensorboard.writer.add_summary(summary, epoch)
 
         if self.comet is not None:
-            self.comet.log_metric('retinanet_mAP', self.mean_ap)
+            self.comet.log_metric('val_retinanet_mAP', self.mean_ap)
 
-        logs['mAP'] = self.mean_ap
+        logs['val_retinanet_mAP'] = self.mean_ap
 
         if self.verbose == 1:
-            print('mAP: {:.4f}'.format(self.mean_ap))
+            print('val_retinanet_mAP: {:.4f}'.format(self.mean_ap))
