@@ -30,6 +30,7 @@ class Evaluate(keras.callbacks.Callback):
         max_detections=100,
         save_path=None,
         tensorboard=None,
+        comet=None,
         weighted_average=False,
         verbose=1
     ):
@@ -51,6 +52,7 @@ class Evaluate(keras.callbacks.Callback):
         self.max_detections  = max_detections
         self.save_path       = save_path
         self.tensorboard     = tensorboard
+        self.comet           = comet
         self.weighted_average = weighted_average
         self.verbose         = verbose
 
@@ -90,6 +92,9 @@ class Evaluate(keras.callbacks.Callback):
             summary_value.simple_value = self.mean_ap
             summary_value.tag = "mAP"
             self.tensorboard.writer.add_summary(summary, epoch)
+
+        if self.comet is not None:
+            self.comet.log_metric('retinanet_mAP', self.mean_ap)
 
         logs['mAP'] = self.mean_ap
 
