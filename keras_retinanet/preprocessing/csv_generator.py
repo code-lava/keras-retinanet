@@ -201,10 +201,15 @@ class CSVGenerator(Generator):
         image = Image.open(self.image_path(image_index))
         return float(image.width) / float(image.height)
 
-    def load_image(self, image_index):
+    def load_image(self, image_index=None, image_filename=None):
         """ Load an image at the image_index.
         """
-        return read_image_bgr(self.image_path(image_index))
+        if image_index is not None:
+            return read_image_bgr(self.image_path(image_index))
+        elif image_filename is not None:
+            return read_image_bgr(image_filename)
+        else:
+            raise_from(ValueError('provide an image_index or an image_filename. image_index takes precedence'), None)
 
     def load_annotations(self, image_index):
         """ Load annotations for an image_index.
