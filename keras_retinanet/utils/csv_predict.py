@@ -94,7 +94,7 @@ def predict(
     model,
     image_filename,
     score_threshold=0.05,
-    max_detections=100,
+    max_detections=1024,
     save_path=None
 ):
     """ Predict a given image filename using a given model.
