@@ -86,7 +86,7 @@ def _get_detections(generator, model, image_filename, score_threshold=0.05, max_
         cv2.imwrite(os.path.join(save_path, 'retinanet_prediction.png'), raw_image)
 
     detections = {"raw_image": raw_image, "image_boxes": image_boxes, "image_scores": image_scores, "image_labels":image_labels}
-    return detections
+    return detections, np.expand_dims(image, axis=0)
 
 
 def predict(
@@ -110,9 +110,9 @@ def predict(
         A dict mapping class names to mAP scores.
     """
     # gather all detections
-    detections = _get_detections(generator, model, image_filename,
+    detections, processed_data = _get_detections(generator, model, image_filename,
                                          score_threshold=score_threshold,
                                          max_detections=max_detections,
                                          save_path=save_path)
 
-    return detections
+    return detections, processed_data
