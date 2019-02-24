@@ -150,6 +150,7 @@ def evaluate(
     iou_threshold=0.5,
     score_threshold=0.05,
     max_detections=100,
+    max_detections_per_bounding_box=2,
     save_path=None
 ):
     """ Evaluate a given dataset using a given model.
@@ -160,6 +161,7 @@ def evaluate(
         iou_threshold   : The threshold used to consider when a detection is positive or negative.
         score_threshold : The score confidence threshold to use for detections.
         max_detections  : The maximum number of detections to use per image.
+        max_detections_per_bounding_box   : The maximum number of detections per bounding box
         save_path       : The path to save images with visualized detections to.
     # Returns
         A dict mapping class names to mAP scores.
@@ -198,11 +200,18 @@ def evaluate(
                     true_positives  = np.append(true_positives, 0)
                     continue
 
-                overlaps            = compute_overlap(np.expand_dims(d, axis=0), annotations)
-                assigned_annotation = np.argmax(overlaps, axis=1)
-                max_overlap         = overlaps[0, assigned_annotation]
+                overlaps = compute_overlap(np.expand_dims(d, axis=0), annotations)
+                assigned_annotations = np.argsort(-overlaps, axis=1)
+                assigned_annotation = assigned_annotations[:, 0]  # np.argmax(overlaps, axis=1)
 
-                if max_overlap >= iou_threshold and assigned_annotation not in detected_annotations:
+                if assigned_annotation in detected_annotations:
+                    for z in range(1, max_detections_per_bounding_box):
+                        assigned_annotation = assigned_annotations[:, z]
+                        if assigned_annotation not in detected_annotations:
+                            break
+
+                max_overlap = overlaps[0, assigned_annotation]
+                if max_overlap >= iou_threshold:
                     false_positives = np.append(false_positives, 0)
                     true_positives  = np.append(true_positives, 1)
                     detected_annotations.append(assigned_annotation)
