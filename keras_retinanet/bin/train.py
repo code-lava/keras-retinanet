@@ -21,6 +21,7 @@ import os
 import sys
 import warnings
 
+from comet_ml import Experiment
 import keras
 import keras.preprocessing.image
 import tensorflow as tf
@@ -33,6 +34,7 @@ if __name__ == "__main__" and __package__ is None:
 
 # Change these to absolute imports if you copy this script outside the keras_retinanet package.
 from .. import layers  # noqa: F401
+from ..utils.helper import make_dir
 from .. import losses
 from .. import models
 from ..callbacks import RedirectModel
@@ -232,8 +234,8 @@ def create_generators(args, preprocess_image):
             max_shear=0.1,
             min_scaling=(0.9, 0.9),
             max_scaling=(1.1, 1.1),
-            flip_x_chance=0.5,
-            flip_y_chance=0.5,
+            flip_x_chance=0.0, # disabled for equivarience purposes - was 0.5
+            flip_y_chance=0.0, # disabled for equivarience purposes - was 0.5
         )
     else:
         transform_generator = random_transform_generator(flip_x_chance=0.5)
@@ -409,6 +411,15 @@ def parse_args(args):
     parser.add_argument('--config',           help='Path to a configuration parameters .ini file.')
     parser.add_argument('--weighted-average', help='Compute the mAP using the weighted average of precisions among classes.', action='store_true')
 
+    parser.add_argument('--experiment-tag', help='A tag to identify the experiment by.', type=str,
+                        default='DEFAULT_EXPERIMENT_TAG')
+    parser.add_argument('--experiment-key', help='A tag to identify the experiment by.', type=str,
+                        default='DEFAULT_EXPERIMENT_KEY')
+
+    parser.add_argument('--comet-api-key', help='The comet-ml api key.', default=None)
+    parser.add_argument('--comet-project-name', help='The comet-ml project name.', type=str)
+    parser.add_argument('--comet-workspace', help='The comet-ml workspace.', type=str)
+
     return check_args(parser.parse_args(args))
 
 
@@ -432,6 +443,17 @@ def main(args=None):
     # optionally load config parameters
     if args.config:
         args.config = read_config_file(args.config)
+
+    if args.comet_api_key is not None:
+        comet_experiment = Experiment(api_key=args.comet_api_key,
+                                      project_name=args.comet_project_name, workspace=args.comet_workspace)
+        comet_experiment.add_tag(args.experiment_tag)
+        comet_experiment.set_name(args.experiment_tag)
+        # get the experiment key from comet and replace the one passed through the arguments
+        args.experiment_key = comet_experiment.get_key()
+
+    # modify the snapshot path to include the experiment key
+    args.snapshot_path = make_dir(os.path.join(args.snapshot_path, args.experiment_key))
 
     # create the generators
     train_generator, validation_generator = create_generators(args, backbone.preprocess_image)

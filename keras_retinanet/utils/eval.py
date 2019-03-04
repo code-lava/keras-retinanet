@@ -150,7 +150,7 @@ def evaluate(
     iou_threshold=0.5,
     score_threshold=0.05,
     max_detections=100,
-    max_detections_per_bounding_box=2,
+    max_detections_per_bounding_box=1,
     save_path=None
 ):
     """ Evaluate a given dataset using a given model.
@@ -206,12 +206,14 @@ def evaluate(
 
                 if assigned_annotation in detected_annotations:
                     for z in range(1, max_detections_per_bounding_box):
+                        if z >= assigned_annotations.shape[1]:
+                            break
                         assigned_annotation = assigned_annotations[:, z]
                         if assigned_annotation not in detected_annotations:
                             break
 
                 max_overlap = overlaps[0, assigned_annotation]
-                if max_overlap >= iou_threshold:
+                if max_overlap >= iou_threshold and assigned_annotation not in detected_annotations:
                     false_positives = np.append(false_positives, 0)
                     true_positives  = np.append(true_positives, 1)
                     detected_annotations.append(assigned_annotation)
