@@ -140,7 +140,12 @@ def _get_annotations(generator):
             if not generator.has_label(label):
                 continue
 
-            all_annotations[i][label] = annotations['bboxes'][annotations['labels'] == label, :].copy()
+            if 'grid_locations' in annotations:
+                bboxes = annotations['bboxes'][annotations['labels'] == label, :].copy()
+                grid_locations = annotations['grid_locations'][annotations['labels'] == label, :].copy()
+                all_annotations[i][label] = np.concatenate((bboxes, grid_locations), axis=1)
+            else:
+                all_annotations[i][label] = annotations['bboxes'][annotations['labels'] == label, :].copy()
 
     return all_annotations
 
@@ -152,6 +157,7 @@ def evaluate(
     score_threshold=0.05,
     max_detections=100,
     max_detections_per_bounding_box=1,
+    location_bias=False,
     save_path=None
 ):
     """ Evaluate a given dataset using a given model.
@@ -163,6 +169,7 @@ def evaluate(
         score_threshold : The score confidence threshold to use for detections.
         max_detections  : The maximum number of detections to use per image.
         max_detections_per_bounding_box   : The maximum number of detections per bounding box
+        location_bias   : Evaluate the results of the mAP based on grid locations of the blocks
         save_path       : The path to save images with visualized detections to.
     # Returns
         A dict mapping class names to mAP scores.
@@ -171,11 +178,18 @@ def evaluate(
     all_detections     = _get_detections(generator, model, score_threshold=score_threshold, max_detections=max_detections, save_path=save_path)
     all_annotations    = _get_annotations(generator)
     average_precisions = {}
-
+    location_precisions = {}
     # all_detections = pickle.load(open('all_detections.pkl', 'rb'))
     # all_annotations = pickle.load(open('all_annotations.pkl', 'rb'))
     # pickle.dump(all_detections, open('all_detections.pkl', 'wb'))
     # pickle.dump(all_annotations, open('all_annotations.pkl', 'wb'))
+
+    # location bias variables
+    if location_bias:
+        loc_false_positives = {}
+        loc_true_positives = {}
+        loc_scores = {}
+        loc_num_annotations = {}
 
     # process detections and annotations
     for label in range(generator.num_classes()):
@@ -193,6 +207,24 @@ def evaluate(
             num_annotations     += annotations.shape[0]
             detected_annotations = []
 
+            if location_bias:
+                loc_labels = []
+                for annotation in annotations:
+                    # remember that we ignore the z axis and compute the mAP for each (x,y) coincidence
+                    loc_labels.append('_'.join("%g" % np.round(g, 2) for g in annotation[4:-1]))
+                    loc_label = loc_labels[-1]
+                    if loc_label not in loc_num_annotations:
+                        loc_num_annotations[loc_labels[-1]] = 0.0
+                    else:
+                        loc_num_annotations[loc_labels[-1]] += 1
+
+                    if loc_label not in loc_scores:
+                        loc_scores[loc_label] = np.zeros((0,))
+                    if loc_label not in loc_false_positives:
+                        loc_false_positives[loc_label] = np.zeros((0,))
+                    if loc_label not in loc_true_positives:
+                        loc_true_positives[loc_label] = np.zeros((0,))
+
             for d in detections:
                 scores = np.append(scores, d[4])
 
@@ -201,7 +233,8 @@ def evaluate(
                     true_positives  = np.append(true_positives, 0)
                     continue
 
-                overlaps = compute_overlap(np.expand_dims(d, axis=0), annotations)
+                # compute overlap on bboxes only
+                overlaps = compute_overlap(np.expand_dims(d, axis=0), annotations[:, :4])
                 assigned_annotations = np.argsort(-overlaps, axis=1)
                 assigned_annotation = assigned_annotations[:, 0]  # np.argmax(overlaps, axis=1)
 
@@ -213,14 +246,25 @@ def evaluate(
                         if assigned_annotation not in detected_annotations:
                             break
 
+                if location_bias:
+                    loc_label = loc_labels[int(assigned_annotation)]
+                    loc_scores[loc_label] = np.append(loc_scores[loc_label], d[4])
+
                 max_overlap = overlaps[0, assigned_annotation]
                 if max_overlap >= iou_threshold and assigned_annotation not in detected_annotations:
                     false_positives = np.append(false_positives, 0)
                     true_positives  = np.append(true_positives, 1)
                     detected_annotations.append(assigned_annotation)
+                    if location_bias:
+                        loc_false_positives[loc_label] = np.append(loc_false_positives[loc_label], 0)
+                        loc_true_positives[loc_label] = np.append(loc_true_positives[loc_label], 1)
+
                 else:
                     false_positives = np.append(false_positives, 1)
                     true_positives  = np.append(true_positives, 0)
+                    if location_bias:
+                        loc_false_positives[loc_label] = np.append(loc_false_positives[loc_label], 1)
+                        loc_true_positives[loc_label] = np.append(loc_true_positives[loc_label], 0)
 
         # no annotations -> AP for this class is 0 (is this correct?)
         if num_annotations == 0:
@@ -244,4 +288,29 @@ def evaluate(
         average_precision  = _compute_ap(recall, precision)
         average_precisions[label] = average_precision, num_annotations
 
-    return average_precisions
+    # compute the mAP for the grid locations
+    if location_bias:
+        for label in loc_num_annotations.keys():
+            # no annotations -> AP for this class is 0 (is this correct?)
+            if loc_num_annotations[label] == 0:
+                location_precisions[label] = 0, 0
+                continue
+
+            # sort by score
+            indices = np.argsort(-loc_scores[label])
+            loc_false_positives[label] = loc_false_positives[label][indices]
+            loc_true_positives[label] = loc_true_positives[label][indices]
+
+            # compute false positives and true positives
+            loc_false_positives[label]  = np.cumsum(loc_false_positives[label])
+            loc_true_positives[label] = np.cumsum(loc_true_positives[label])
+
+            # compute recall and precision
+            loc_recall = loc_true_positives[label] / loc_num_annotations[label]
+            loc_precision = loc_true_positives[label] / np.maximum(loc_true_positives[label] + loc_false_positives[label], np.finfo(np.float64).eps)
+
+            # compute average precision
+            location_precision = _compute_ap(loc_recall, loc_precision)
+            location_precisions[label] = location_precision, loc_num_annotations[label]
+
+    return average_precisions, location_precisions
