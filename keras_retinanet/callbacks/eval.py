@@ -31,6 +31,7 @@ class Evaluate(keras.callbacks.Callback):
         save_path=None,
         tensorboard=None,
         comet=None,
+        location_bias=False,
         weighted_average=False,
         verbose=1
     ):
@@ -43,6 +44,7 @@ class Evaluate(keras.callbacks.Callback):
             max_detections   : The maximum number of detections to use per image.
             save_path        : The path to save images with visualized detections to.
             tensorboard      : Instance of keras.callbacks.TensorBoard used to log the mAP value.
+            location_bias    : Compute the mAP based on the block locations (only works on custom FusionNet generator)
             weighted_average : Compute the mAP using the weighted average of precisions among classes.
             verbose          : Set the verbosity level, by default this is set to 1.
         """
@@ -55,6 +57,7 @@ class Evaluate(keras.callbacks.Callback):
         self.comet           = comet
         self.weighted_average = weighted_average
         self.verbose         = verbose
+        self.location_bias   = location_bias
 
         super(Evaluate, self).__init__()
 
@@ -62,24 +65,31 @@ class Evaluate(keras.callbacks.Callback):
         logs = logs or {}
 
         # run evaluation
-        average_precisions = evaluate(
+        average_precisions, location_precisions = evaluate(
             self.generator,
             self.model,
             iou_threshold=self.iou_threshold,
             score_threshold=self.score_threshold,
             max_detections=self.max_detections,
-            save_path=self.save_path
+            save_path=self.save_path,
+            location_bias=location_bias
         )
 
         # compute per class average precision
         total_instances = []
         precisions = []
-        for label, (average_precision, num_annotations ) in average_precisions.items():
+        for label, (average_precision, num_annotations) in average_precisions.items():
             if self.verbose == 1:
                 print('{:.0f} instances of class'.format(num_annotations),
                       self.generator.label_to_name(label), 'with average precision: {:.4f}'.format(average_precision))
             total_instances.append(num_annotations)
             precisions.append(average_precision)
+
+        for location, (average_precision, num_annotations) in location_precisions.items():
+            if self.verbose == 1:
+                print('{:.0f} instances of location'.format(num_annotations),
+                      location, 'with average precision: {:.4f}'.format(average_precision))
+
         if self.weighted_average:
             self.mean_ap = sum([a * b for a, b in zip(total_instances, precisions)]) / sum(total_instances)
         else:
