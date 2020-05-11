@@ -41,6 +41,7 @@ from ..callbacks import RedirectModel
 from ..callbacks.eval import Evaluate
 from ..models.retinanet import retinanet_bbox
 from ..preprocessing.csv_generator import CSVGenerator
+from ..preprocessing.csvloc_generator import CSVLocGenerator
 from ..preprocessing.kitti import KittiGenerator
 from ..preprocessing.open_images import OpenImagesGenerator
 from ..preprocessing.pascal_voc import PascalVocGenerator
@@ -173,7 +174,8 @@ def create_callbacks(model, training_model, prediction_model, validation_generat
             # use prediction model for evaluation
             evaluation = CocoEval(validation_generator, tensorboard=tensorboard_callback)
         else:
-            evaluation = Evaluate(validation_generator, tensorboard=tensorboard_callback, weighted_average=args.weighted_average)
+            evaluation = Evaluate(validation_generator, tensorboard=tensorboard_callback, weighted_average=args.weighted_average,
+                                  location_bias=True if args.dataset_type == 'csvloc' else False)
         evaluation = RedirectModel(evaluation, prediction_model)
         callbacks.append(evaluation)
 
@@ -269,6 +271,23 @@ def create_generators(args, preprocess_image):
             'test',
             **common_args
         )
+    elif args.dataset_type == 'csvloc':
+        train_generator = CSVLocGenerator(
+            args.annotations,
+            args.classes,
+            transform_generator=transform_generator,
+            **common_args
+        )
+
+        if args.val_annotations:
+            validation_generator = CSVLocGenerator(
+                args.val_annotations,
+                args.classes,
+                **common_args
+            )
+        else:
+            validation_generator = None
+
     elif args.dataset_type == 'csv':
         train_generator = CSVGenerator(
             args.annotations,
@@ -386,6 +405,12 @@ def parse_args(args):
     csv_parser.add_argument('annotations', help='Path to CSV file containing annotations for training.')
     csv_parser.add_argument('classes', help='Path to a CSV file containing class label mapping.')
     csv_parser.add_argument('--val-annotations', help='Path to CSV file containing annotations for validation (optional).')
+
+    csvloc_parser = subparsers.add_parser('csvloc')
+    csvloc_parser.add_argument('annotations', help='Path to CSV file containing annotations for training.')
+    csvloc_parser.add_argument('classes', help='Path to a CSV file containing class label mapping.')
+    csvloc_parser.add_argument('--val-annotations',
+                            help='Path to CSV file containing annotations for validation (optional).')
 
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--snapshot',          help='Resume training from a snapshot.')
