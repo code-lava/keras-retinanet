@@ -68,7 +68,7 @@ def _read_annotations(csv_reader, classes):
         line += 1
 
         try:
-            img_file, x1, y1, x2, y2, class_name, layout_id, grid_location = row[:8]
+            img_file, x1, y1, x2, y2, class_name, layout_id, _, _, grid_location = row[:10]
         except:
             try:
                 img_file, x1, y1, x2, y2, class_name, layout_id = row[:7]
@@ -80,7 +80,7 @@ def _read_annotations(csv_reader, classes):
                     None)
         if img_file not in result:
             result[img_file] = []
-            
+
         # If a row contains only an image path, it's an image without annotations.
         if (x1, y1, x2, y2, class_name) == ('', '', '', '', ''):
             continue
@@ -89,8 +89,8 @@ def _read_annotations(csv_reader, classes):
         y1 = _parse(y1, int, 'line {}: malformed y1: {{}}'.format(line))
         x2 = _parse(x2, int, 'line {}: malformed x2: {{}}'.format(line))
         y2 = _parse(y2, int, 'line {}: malformed y2: {{}}'.format(line))
-        grid_location = (_parse(loc, int, 'line {}: malformed y2: {{}}'.format(line)) for loc in
-                         grid_location.split('_'))
+        grid_location = [_parse(loc, int, 'line {}: malformed y2: {{}}'.format(line)) for loc in
+                         grid_location.split('_')]
 
         # Check that the bounding box is valid.
         if x2 <= x1:
